@@ -147,3 +147,5 @@ tinygo build -size short -o ./build/test.hex -target=nano-rp2040 -stack-size 8kb
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/webclient/
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/webserver/
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/mqttclient/paho/
+tinygo build -size short -o ./build/test.uf2 -target=pico ./example/dps310/
+
