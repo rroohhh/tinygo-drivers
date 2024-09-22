@@ -43,9 +43,9 @@ func NewSPI(c Config) (*DPS310, error) {
 
 	d.cs.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	d.cs.Low()
-	time.Sleep(SetUpTime * time.Nanosecond)
+	time.Sleep(CSB_Setup_Time * time.Nanosecond)
 	d.cs.High()
-	time.Sleep(SetUpTime * time.Nanosecond)
+	time.Sleep(CSB_Setup_Time * time.Nanosecond)
 
 	return d, nil
 }
@@ -53,7 +53,7 @@ func NewSPI(c Config) (*DPS310, error) {
 // initialization code for sensor on  SPI
 func (d *DPS310) Init() (err error) {
 
-	chipId, err := d.readRegister(PRODREVID)
+	chipId, err := d.readRegister(Product_ID)
 	if err != nil {
 		return
 	}
@@ -90,6 +90,16 @@ func (d *DPS310) Init() (err error) {
 		return
 	}
 
+	d.waitDataAvailable(10 * time.Millisecond)
+
+	// set sealevelPressure
+	d.seaLevelPressure = 1013.25
+
+	return
+}
+
+// waits for pressure and temperature data available
+func (d *DPS310) waitDataAvailable(waitTime time.Duration) (err error) {
 	var (
 		tOk, pOk bool
 	)
@@ -106,13 +116,9 @@ func (d *DPS310) Init() (err error) {
 		if tOk && pOk {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(waitTime)
 	}
-
-	// set sealevelPressure
-	d.seaLevelPressure = 1013.25
-
-	return
+	return nil
 }
 
 func (d *DPS310) SetMode(mode Mode) error {
@@ -125,21 +131,21 @@ func (d *DPS310) SetMode(mode Mode) error {
 		return fmt.Errorf("incompatible measuring mode: %v for sample rates > 1", mode)
 	}
 
-	data, err := d.readRegister(MEASCFG)
+	data, err := d.readRegister(MEAS_CFG)
 	if err != nil {
 		return err
 	}
 
-	data &= 0b1111_1000
-	mode &= 0b0000_0111
+	data &= MEAS_CFG_CTRL_CLR_MSK
+	mode &=  MEAS_CFG_CTRL_SET_MSK
 	data = data | uint8(mode)
-	return d.writeRegister(MEASCFG, data)
+	return d.writeRegister(MEAS_CFG, data)
 }
 
 // readRegister reads from a single  register.
 func (d *DPS310) readRegister(address uint8) (uint8, error) {
 	buf := d.rwBuf[:2]
-	buf[0] = 0b1000_0000 | address
+	buf[0] = SPIReadBit| address
 	buf[1] = 0
 	err := d.tx(buf)
 	if err != nil {
@@ -158,11 +164,11 @@ func (d *DPS310) writeRegister(address, data uint8) (err error) {
 
 func (d *DPS310) tx(buf []uint8) (err error) {
 	d.cs.Low()
-	time.Sleep(SetUpTime * time.Nanosecond)
+	time.Sleep(CSB_Setup_Time * time.Nanosecond)
 
 	err = d.spi.Tx(buf, buf)
 
-	time.Sleep(SetUpTime * time.Nanosecond)
+	time.Sleep(CSB_Setup_Time * time.Nanosecond)
 	d.cs.High()
 	return
 }
@@ -172,14 +178,15 @@ func (d *DPS310) Reset() (err error) {
 	// check func for sesnor ready
 	sensorRdy :=
 		func() (bool, error) {
-			v, err := d.readRegister(MEASCFG)
+			v, err := d.readRegister(MEAS_CFG)
 			if err != nil {
 				return false, err
 			}
-			return v&0b0100_0000 != 0, nil
+			return v & MEAS_CFG_SENSOR_RDY_MSK != 0, nil
 		}
 
-	err = d.writeRegister(RESET, 0b1000_1001)
+	// err = d.writeRegister(RESET, 0b1000_1001)
+	err = d.writeRegister(RESET, RESET_VAL)
 	if err != nil {
 		return
 	}
@@ -206,11 +213,11 @@ func (d *DPS310) readCalibration() (err error) {
 
 	// check func for calibration ready
 	calibRdy := func() (bool, error) {
-		v, err := d.readRegister(MEASCFG)
+		v, err := d.readRegister(MEAS_CFG)
 		if err != nil {
 			return false, err
 		}
-		return v&0b1000_0000 != 0, nil
+		return v & MEAS_CFG_COEF_RDY_MSK != 0, nil
 	}
 
 	// Wait till we're ready to read calibration
@@ -230,7 +237,7 @@ func (d *DPS310) readCalibration() (err error) {
 		coeffs [18]uint8
 	)
 	i := 0
-	for addr := uint8(COEFSTART); addr < COEFEND; addr++ {
+	for addr := uint8(COEF_START); addr < COEF_END; addr++ {
 		coeffs[i], err = d.readRegister(addr)
 		if err != nil {
 			return
@@ -238,6 +245,7 @@ func (d *DPS310) readCalibration() (err error) {
 		i++
 	}
 
+	// see: datasheet page 37
 	d.c0 = decVal((uint12_t(coeffs[0])<<4 |
 		(uint12_t(coeffs[1]) >> 4 & 0x0f)))
 
@@ -341,21 +349,22 @@ func (d *DPS310) ConfigurePressure(rate Rate, os Precision) (err error) {
 		return fmt.Errorf("invalid rate oversampling comination")
 	}
 
-	data := (uint8(rate)&0b0000_0111)<<4 | (uint8(os) & 0b0000_1111)
-	err = d.writeRegister(PRSCFG, data)
+	data := (uint8(rate) & PRS_CFG_PM_RATE_MSK)<<4 | 
+	(uint8(os) & PRS_CFG_PM_PRC_MSK)
+	err = d.writeRegister(PRS_CFG, data)
 	if err != nil {
 		return
 	}
 
-	data, err = d.readRegister(CFGREG)
+	data, err = d.readRegister(CFG_REG)
 	if err != nil {
 		return
 	}
 
 	if os > PRC_8SAMPLES {
-		err = d.writeRegister(CFGREG, data|0b0000_0100)
+		err = d.writeRegister(CFG_REG, data | CFG_REG_PRS_SHIFT_EN_MSK)
 	} else {
-		err = d.writeRegister(CFGREG, data&0b1111_1011)
+		err = d.writeRegister(CFG_REG, data & CFG_REG_PRS_SHIFT_DIS_MSK)
 	}
 	if err != nil {
 		return
@@ -374,8 +383,8 @@ func (d *DPS310) ConfigureTemperature(rate Rate, os Precision) (err error) {
 	var (
 		data uint8
 	)
-	data, err = d.readRegister(TMPCOEFSRCE)
-	data &= 0b1000_0000
+	data, err = d.readRegister(COEF_SRCE)
+	data &= COEF_SRCE_TMP_COEF_SR_MSK
 
 	// check rate oversamling combination
 	d.tempRate = rate
@@ -385,21 +394,21 @@ func (d *DPS310) ConfigureTemperature(rate Rate, os Precision) (err error) {
 	}
 
 	// add temp rate and oversampling
-	data += (uint8(rate)&0b0000_0111)<<4 | (uint8(os) & 0b0000_1111)
-	err = d.writeRegister(TMPCFG, data)
+	data += (uint8(rate)&TMP_CFG_TM_PRC_MSK)<<4 | (uint8(os) & TMP_CFG_TM_RATE_MSK)
+	err = d.writeRegister(TMP_CFG, data)
 	if err != nil {
 		return
 	}
 
-	data, err = d.readRegister(CFGREG)
+	data, err = d.readRegister(CFG_REG)
 	if err != nil {
 		return
 	}
 
 	if os > PRC_8SAMPLES {
-		err = d.writeRegister(CFGREG, data|0b000_1000)
+		err = d.writeRegister(CFG_REG, data| CFG_REG_TMP_SHIFT_EN_MSK)
 	} else {
-		err = d.writeRegister(CFGREG, data&0b1111_0111)
+		err = d.writeRegister(CFG_REG, data& CFG_REG_TMP_SHIFT_DIS_MSK)
 	}
 	if err != nil {
 		return
@@ -417,12 +426,13 @@ func (d *DPS310) ReadTemperature() (temperature float32, err error) {
 		return
 	}
 
+	// see: datasheet pages 14 and 15 
 	scaledRawtemp := rawTemperature / d.tempScale
 	temperature = scaledRawtemp*d.c1 + d.c0/2.0
 	return
 }
 
-// Read the vakues  from the sensor
+// Read the values  from the sensor
 func (d *DPS310) ReadPressure() (pressure, temperature float32, err error) {
 
 	rawPressure, err := d.readRawPressure()
@@ -435,6 +445,7 @@ func (d *DPS310) ReadPressure() (pressure, temperature float32, err error) {
 		return
 	}
 
+	// see: datasheet pages 14 and 15 
 	scaledRawtemp := rawTemperature / d.tempScale
 	temperature = scaledRawtemp*d.c1 + d.c0/2.0
 
@@ -451,7 +462,7 @@ func (d *DPS310) ReadPressure() (pressure, temperature float32, err error) {
 // reads raw temperature
 func (d *DPS310) readRawTemperature() (temperature float32, err error) {
 	buf := d.rwBuf[:4]
-	buf[0] = 0x80 | TMPB2
+	buf[0] = 0x80 | TMP_B2
 	buf[1] = 0
 	buf[2] = 0
 	buf[3] = 0
@@ -469,7 +480,7 @@ func (d *DPS310) readRawTemperature() (temperature float32, err error) {
 // reads raw pressure
 func (d *DPS310) readRawPressure() (pressure float32, err error) {
 	buf := d.rwBuf[:4]
-	buf[0] = 0x80 | PRSB2
+	buf[0] = SPIReadBit | PRS_B2
 	buf[1] = 0
 	buf[2] = 0
 	buf[3] = 0
@@ -486,15 +497,15 @@ func (d *DPS310) readRawPressure() (pressure float32, err error) {
 // Whether new temperature data is available
 // returns True if new data available to read
 func (d *DPS310) TemperatureAvailable() (bool, error) {
-	v, err := d.readRegister(MEASCFG)
-	return v&0b0010_0000 != 0, err
+	v, err := d.readRegister(MEAS_CFG)
+	return v&MEAS_CFG_TMP_RDY_MSK!= 0, err
 }
 
 // Whether new pressure data is available
 // returns True if new data available to read
 func (d *DPS310) PressureAvailable() (bool, error) {
-	v, err := d.readRegister(MEASCFG)
-	return v&0b001_0000 != 0, err
+	v, err := d.readRegister(MEAS_CFG)
+	return v&MEAS_CFG_PRS_RDY_MSK != 0, err
 }
 
 func (d *DPS310) ReadAltitude() (altitude float32, err error) {

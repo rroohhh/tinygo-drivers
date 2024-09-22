@@ -1,5 +1,9 @@
 package dps310
 
+const (
+	SPIReadBit = 0b1000_0000
+)
+
 type Rate uint8
 
 const (
@@ -11,6 +15,7 @@ const (
 	RATE_32HZ
 	RATE_64HZ
 	RATE_128HZ
+	RATE_MAXRATE
 )
 
 type Precision uint8
@@ -39,23 +44,38 @@ const (
 	ContTempMeas     Mode = 0b0000_00110
 	ContPresTempMeas Mode = 0b0000_00111
 )
-
 const (
-	CHIPID          = 0x10
-	I2CADDR_DEFAULT = 119
-	// register adresses
-	PRSB2       = 0x00
-	TMPB2       = 0x03
-	PRSCFG      = 0x06
-	TMPCFG      = 0x07
-	MEASCFG     = 0x08
-	CFGREG      = 0x09
-	COEFSTART   = 0x10
-	COEFEND     = 0x22
-	RESET       = 0x0C
-	PRODREVID   = 0x0D
-	TMPCOEFSRCE = 0x28
-	SetUpTime   = 20 // CSB Setup Time (Nanoseconds)
+	CHIPID          			= 0x10
+	CSB_Setup_Time   			= 20 // (Nanoseconds)
+
+	// register and masks
+	PRS_B2           			= 0x00
+	TMP_B2           			= 0x03
+	PRS_CFG         	 		= 0x06
+	PRS_CFG_PM_RATE_MSK 		= 0b0000_0111
+	PRS_CFG_PM_PRC_MSK 			= 0b0000_1111
+	TMP_CFG        				= 0x07
+	TMP_CFG_TM_RATE_MSK 		= 0b0000_0111
+	TMP_CFG_TM_PRC_MSK 			= 0b0000_1111
+	MEAS_CFG       				= 0x08
+	MEAS_CFG_COEF_RDY_MSK 		= 0b1000_0000
+	MEAS_CFG_SENSOR_RDY_MSK 	= 0b0100_0000
+	MEAS_CFG_TMP_RDY_MSK 		= 0b0010_0000
+	MEAS_CFG_PRS_RDY_MSK 		= 0b0001_0000
+	MEAS_CFG_CTRL_CLR_MSK   	= 0b1111_1000
+	MEAS_CFG_CTRL_SET_MSK   	= 0b0000_0111
+	CFG_REG      				= 0x09
+	CFG_REG_TMP_SHIFT_EN_MSK	= 0b0000_1000
+	CFG_REG_TMP_SHIFT_DIS_MSK	= 0b1111_0111
+	CFG_REG_PRS_SHIFT_EN_MSK	= 0b0000_0100
+	CFG_REG_PRS_SHIFT_DIS_MSK	= 0b1111_1011
+	COEF_START  		 		= 0x10
+	COEF_END     				= 0x22
+	RESET       				= 0x0C
+	RESET_VAL    				= 0b1000_1001
+	Product_ID   				= 0x0D
+	COEF_SRCE 					= 0x28
+	COEF_SRCE_TMP_COEF_SR_MSK 	= 0b1000_0000
 )
 
 type osData struct {
