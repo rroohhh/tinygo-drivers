@@ -106,6 +106,7 @@ tinygo build -size short -o ./build/test.hex -target=xiao ./examples/pcf8563/clk
 tinygo build -size short -o ./build/test.hex -target=xiao ./examples/pcf8563/time/
 tinygo build -size short -o ./build/test.hex -target=xiao ./examples/pcf8563/timer/
 tinygo build -size short -o ./build/test.hex -target=pico ./examples/qmi8658c/main.go
+tinygo build -size short -o ./build/test.hex -target=feather-rp2040 ./examples/pcf8591/
 tinygo build -size short -o ./build/test.hex -target=feather-m0 ./examples/ina260/main.go
 tinygo build -size short -o ./build/test.hex -target=nucleo-l432kc ./examples/aht20/main.go
 tinygo build -size short -o ./build/test.hex -target=feather-m4 ./examples/sdcard/console/
@@ -146,3 +147,5 @@ tinygo build -size short -o ./build/test.hex -target=nano-rp2040 -stack-size 8kb
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/webclient/
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/webserver/
 tinygo build -size short -o ./build/test.hex -target=wioterminal -stack-size 8kb ./examples/net/mqttclient/paho/
+tinygo build -size short -o ./build/test.uf2 -target=pico ./example/dps310/
+
